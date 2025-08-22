@@ -7,9 +7,16 @@ from src.routes import main # Importa el Blueprint 'main'
 from src.admin import setup_admin
 from flask_migrate import Migrate
 from werkzeug.middleware.proxy_fix import ProxyFix
+from flask_jwt_extended import JWTManager
 
 # Crea la instancia de la aplicación Flask
 app = Flask(__name__, template_folder='src/templates')
+
+# Configurar la clave secreta
+app.config["JWT_SECRET_KEY"] = "super-secret-key"  
+
+# Inicializar el gestor JWT con la app
+jwt = JWTManager(app)
 
 # Configuración de la aplicación
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
