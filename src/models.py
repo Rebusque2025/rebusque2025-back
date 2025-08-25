@@ -1,16 +1,19 @@
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
-from sqlalchemy import String, Integer, Boolean, ForeignKey, Text, DateTime, Float, Enum
+from sqlalchemy import String, Integer, Boolean, ForeignKey, Text, DateTime, Float
 from datetime import datetime
-from enum import Enum as PyEnum
+#from enum import Enum as PyEnum
 
 
 # Inicializamos la extensión de SQLAlchemy
 db = SQLAlchemy()
  # 1 ====TABLA QUE GUARDA EL ROL DEL USUARIO
-class UserRole(PyEnum):
-    CLIENTE = "cliente"
-    PROVEEDOR = "proveedor"
+#class UserRole(PyEnum):
+ #   CLIENTE = "cliente"
+ #   PROVEEDOR = "proveedor"
+
+
+ 
  # 1.1 ====TABLA USER
 class User(db.Model):
     __tablename__ = 'user'

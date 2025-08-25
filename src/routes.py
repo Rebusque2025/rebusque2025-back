@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, jsonify, url_for,request
 import os
-from src.models import db, User, UserRole
+from src.models import db, User, Category, Service
 from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
 from flask_jwt_extended import create_access_token
@@ -138,3 +138,18 @@ def login():
     except Exception as e:
         print(f"error: {e}")
         return jsonify({"msg": "Unexpected error"}), 500
+
+
+####### Enpoints filtros #######
+
+#Category
+@main.route("/categories", methods=["GET"])
+def get_categories():
+    categories = Category.query.all()
+    return jsonify([{"id": c.id, "name": c.name} for c in categories])
+
+#Service
+@main.route("/services", methods=["GET"])
+def get_services():
+    services = Service.query.all()
+    return jsonify([])
