@@ -1,14 +1,17 @@
-from flask import Blueprint, render_template, jsonify, url_for,request
+from flask import Blueprint, render_template, jsonify, url_for, request
 import os
-from src.models import db, User, Category, Service
+from src.models import db, User, Category, Service, Contract, Review
 from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
 from flask_jwt_extended import create_access_token
 from sqlalchemy import select
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from sqlalchemy import func
 
 
 # Define a new Blueprint for the API
 main = Blueprint('api', __name__)
+search_bp = Blueprint('search', __name__)
 
 @main.route('/')
 def index():
@@ -142,14 +145,65 @@ def login():
 
 ####### Enpoints filtros #######
 
-#Category
+#GET de todas las categorias
 @main.route("/categories", methods=["GET"])
 def get_categories():
     categories = Category.query.all()
     return jsonify([{"id": c.id, "name": c.name} for c in categories])
 
-#Service
-@main.route("/services", methods=["GET"])
-def get_services():
-    services = Service.query.all()
-    return jsonify([])
+# Barra de filtro de busqueda con bp aparte 
+
+@search_bp.route("/search", methods=["GET"])
+def search_services():
+
+       #### Filtros categoria, precio y rating 
+    category_id = request.args.get("category_id", type=int)
+    min_price = request.args.get("min_price", type=float)
+    max_price = request.args.get("max_price", type=float)
+    min_rating = request.args.get("min_rating", type=float)
+
+    query = Service.query
+
+    if category_id:
+        query = query.filter(Service.category_id == category_id)
+
+    if min_price is not None:
+        query = query.filter(Service.price >= min_price)
+
+    if max_price is not None:
+        query = query.filter(Service.price <= max_price)
+
+#### rating promedio
+    if min_rating is not None:
+        query = query.join(Service.contracts).join(Contract.reviews).group_by(Service.id)
+        query = query.having(func.avg(Review.rating) >= min_rating)
+        
+    services = query.all()
+
+    result = [
+        {
+            "id": s.id,
+            "title": s.title,
+            "description": s.description,
+            "price": s.price,
+            "provider": s.provider.name,
+            "category": s.category.name,
+            "average_rating": db.session.query(func.avg(Review.rating)).join(Service.contracts).join("reviews").filter(Service.id == s.id).scalar() or 0
+        }
+        for s in services
+    ]
+
+    return jsonify(result)
+
+#####anexar endpoit de auth
+
+@main.route("/valid-auth", methods=["GET"])
+@jwt_required()
+def valid_auth():
+    email = get_jwt_identity()
+    user = User.query.filter_by(email=email).first()
+
+    if not user:
+        return jsonify(error="Usuario no encontrado"), 404
+
+    return jsonify( logged=True, logged_in_as=email, role=user.role), 200

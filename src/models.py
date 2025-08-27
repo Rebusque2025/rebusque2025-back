@@ -19,7 +19,8 @@ class User(db.Model):
     __tablename__ = 'user'
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(80), nullable=False)
-    email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(120), unique=True, nullable=True) ###preguntar si es opcional entre varios campos, (entonces nullableTrue) o si no es opcional y son obligatorios los dos campos, (nullableFalse)
+    phone: Mapped[str] = mapped_column(String(20), unique=True, nullable=True) ####opcion de registro con telefono agregada
     password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     photo_url: Mapped[str] = mapped_column(String(255), nullable=True)
