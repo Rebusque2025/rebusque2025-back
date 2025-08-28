@@ -1,6 +1,6 @@
 from flask_admin.contrib.sqla import ModelView
 from wtforms_sqlalchemy.fields import QuerySelectField
-from src.models import db, User, Category, Service, UserRole, Contract, Review
+from src.models import db, User, Category, Service, Contract, Review
 from wtforms import SelectField
 
 
@@ -13,7 +13,7 @@ class ServiceAdmin(ModelView):
     }
     form_args = {
         "provider": dict(
-            query_factory=lambda: User.query.filter_by(role=UserRole.PROVEEDOR).all(),
+            query_factory=lambda: User.query.filter_by(role=User.role).all(),
             get_label="name"
         ),
         "category": dict(

@@ -1,10 +1,11 @@
 from flask import Blueprint, render_template, jsonify, url_for,request
 import os
-from src.models import db, User, UserRole
+from src.models import db, User, UserRole, Service, Category
 from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
 from flask_jwt_extended import create_access_token
 from sqlalchemy import select
+from sqlalchemy import or_
 
 
 # Define a new Blueprint for the API
@@ -138,3 +139,53 @@ def login():
     except Exception as e:
         print(f"error: {e}")
         return jsonify({"msg": "Unexpected error"}), 500
+
+@main.route("/search/professionals", methods=["GET"])
+def search_professionals():
+    query = request.args.get("q", None)
+
+    if not query:
+        return jsonify({"msg": "Query parameter 'q' is required"}), 400
+
+    role_value = "proveedor"  # string literal
+
+    # Consulta uniendo User, Service y Category
+    results = (
+        db.session.query(User)
+        .join(Service)
+        .join(Category)
+        .filter(
+            User.role == role_value,  # ✅ aquí usamos string puro
+            or_(
+                User.name.ilike(f"%{query}%"),
+                # User.phone.ilike(f"%{query}%"),
+                Service.title.ilike(f"%{query}%"),
+                Service.description.ilike(f"%{query}%"),
+                Category.name.ilike(f"%{query}%")
+            )
+        )
+        .all()
+    )
+
+    # Serializamos los resultados
+    response = []
+    for u in results:
+        response.append({
+            "id": u.id,
+            "name": u.name,
+            # "phone": u.phone,
+            "role": u.role,  # string directamente, sin .value
+            "photo_url": u.photo_url,
+            "services": [
+                {
+                    "title": s.title,
+                    "description": s.description,
+                    "price": s.price,
+                    "category": s.category.name
+                }
+                for s in u.services
+            ]
+        })
+
+    return jsonify(response), 200
+
