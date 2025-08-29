@@ -6,7 +6,7 @@ from werkzeug.security import check_password_hash
 from flask_jwt_extended import create_access_token
 from sqlalchemy import select
 from sqlalchemy import or_
-
+from flask_jwt_extended import jwt_required, get_jwt_identity
 
 # Define a new Blueprint for the API
 main = Blueprint('api', __name__)
@@ -155,10 +155,10 @@ def search_professionals():
         .join(Service)
         .join(Category)
         .filter(
-            User.role == role_value,  # ✅ aquí usamos string puro
+            User.role == role_value,  # aquí usamos string puro
             or_(
                 User.name.ilike(f"%{query}%"),
-                # User.phone.ilike(f"%{query}%"),
+                User.phone.ilike(f"%{query}%"),
                 Service.title.ilike(f"%{query}%"),
                 Service.description.ilike(f"%{query}%"),
                 Category.name.ilike(f"%{query}%")
@@ -171,11 +171,6 @@ def search_professionals():
     response = []
     for u in results:
         response.append({
-            "id": u.id,
-            "name": u.name,
-            # "phone": u.phone,
-            "role": u.role,  # string directamente, sin .value
-            "photo_url": u.photo_url,
             "services": [
                 {
                     "title": s.title,
@@ -189,3 +184,21 @@ def search_professionals():
 
     return jsonify(response), 200
 
+@main.route("/valid-auth", methods=["GET"])
+@jwt_required()
+def valid_auth():
+    email = get_jwt_identity()
+
+    # Buscar al usuario en la base de datos
+    user = db.session.execute(
+        select(User).where(User.email == email)
+    ).scalar_one_or_none()
+
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
+
+    return jsonify({
+        "logged": True,
+        "logged_in_as": email,
+        "role": user.role.value   # devolvemos el rol como string
+    }), 200
