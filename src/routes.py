@@ -124,7 +124,7 @@ def login():
             return jsonify({"msg": "Bad email or password"}), 401
 
         # Generar token con ID del usuario
-        access_token = create_access_token(identity=query_user.id)
+        access_token = create_access_token(identity=str(query_user.id)) ### parseando a string el id
 
         return jsonify({
             "msg": "Login successful",
@@ -188,7 +188,7 @@ def search_services():
             "price": s.price,
             "provider": s.provider.name,
             "category": s.category.name,
-            "average_rating": db.session.query(func.avg(Review.rating)).join(Service.contracts).join("reviews").filter(Service.id == s.id).scalar() or 0
+            "average_rating": db.session.query(func.avg(Review.rating)).join(Service.contracts).join(Review).filter(Service.id == s.id).scalar() or 0
         }
         for s in services
     ]
@@ -200,10 +200,10 @@ def search_services():
 @main.route("/valid-auth", methods=["GET"])
 @jwt_required()
 def valid_auth():
-    email = get_jwt_identity()
-    user = User.query.filter_by(email=email).first()
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
 
     if not user:
         return jsonify(error="Usuario no encontrado"), 404
 
-    return jsonify( logged=True, logged_in_as=email, role=user.role), 200
+    return jsonify( logged=True, logged_in_as=user.email, role=user.role), 200
