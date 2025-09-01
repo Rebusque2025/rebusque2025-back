@@ -1,15 +1,18 @@
-from flask import Blueprint, render_template, jsonify, url_for,request
+from flask import Blueprint, render_template, jsonify, url_for, request
 import os
-from src.models import db, User, UserRole, Service, Category
+from src.models import db, User, Category, Service, Contract, Review
 from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
 from flask_jwt_extended import create_access_token
 from sqlalchemy import select
 from sqlalchemy import or_
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from sqlalchemy import func
+
 
 # Define a new Blueprint for the API
 main = Blueprint('api', __name__)
+search_bp = Blueprint('search', __name__)
 
 @main.route('/')
 def index():
@@ -125,7 +128,7 @@ def login():
             return jsonify({"msg": "Bad email or password"}), 401
 
         # Generar token con ID del usuario
-        access_token = create_access_token(identity=query_user.id)
+        access_token = create_access_token(identity=str(query_user.id)) ### parseando a string el id
 
         return jsonify({
             "msg": "Login successful",
@@ -187,34 +190,79 @@ def search_professionals():
 
     return jsonify(response), 200
 
+####### Enpoints filtros #######
+
+#GET de todas las categorias
+@main.route("/categories", methods=["GET"])
+def get_categories():
+    categories = Category.query.all()
+    return jsonify([{"id": c.id, "name": c.name} for c in categories])
+
+# Barra de filtro de busqueda con bp aparte 
+
+@search_bp.route("/search", methods=["GET"])
+def search_services():
+
+       #### Filtros categoria, precio, rating y status 
+    category_id = request.args.get("category_id", type=int)
+    min_price = request.args.get("min_price", type=float)
+    max_price = request.args.get("max_price", type=float)
+    min_rating = request.args.get("min_rating", type=float)
+    contract_status = request.args.get("contract_status", type=str)
+
+    query = Service.query
+
+    if category_id:
+        query = query.filter(Service.category_id == category_id)
+
+    if min_price is not None:
+        query = query.filter(Service.price >= min_price)
+
+    if max_price is not None:
+        query = query.filter(Service.price <= max_price) 
+
+    if contract_status:
+        query = query.join(Service.contracts).filter(Contract.status == contract_status).group_by(Service.id)
+
+#### rating promedio
+    if min_rating is not None:
+        query = query.join(Service.contracts).join(Contract.reviews).group_by(Service.id)
+        query = query.having(func.avg(Review.rating) >= min_rating)
+        
+    services = query.all()
+
+    result = [
+        {
+            "id": s.id,
+            "title": s.title,
+            "description": s.description,
+            "price": s.price,
+            "provider": s.provider.name,
+            "category": s.category.name,
+            "contracts": [
+                {
+                    "id": c.id,
+                    "start_date": c.start_date,
+                    "status": c.status
+                }
+                for c in s.contracts if not contract_status or c.status == contract_status
+            ],
+            "average_rating": db.session.query(func.coalesce(func.avg(Review.rating), 0)).join(Service.contracts).outerjoin(Contract.reviews).filter(Service.id == s.id).scalar()
+        }
+        for s in services
+    ]
+
+    return jsonify(result)
+
+#####anexar endpoit de auth
+
 @main.route("/valid-auth", methods=["GET"])
 @jwt_required()
 def valid_auth():
-    try:
-        # Obtener el email desde el JWT
-        email = get_jwt_identity()
-        if not email:
-            return jsonify({"msg": "Invalid token"}), 401
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
 
-        # Buscar al usuario en la base de datos
-        user = db.session.execute(
-            select(User).where(User.email == email)
-        ).scalar_one_or_none()
+    if not user:
+        return jsonify(error="Usuario no encontrado"), 404
 
-        if not user:
-            return jsonify({"msg": "User not found"}), 404
-
-        # Asegurar que el rol se devuelva como string
-        role_str = str(user.role.value) if user.role else "No role assigned"
-
-        return jsonify({
-            "logged": True,
-            "logged_in_as": email,
-            "logged_in_phone": user.phone,
-            "role": role_str
-        }), 200
-
-    except Exception as e:
-        # Captura errores inesperados
-        return jsonify({"msg": f"Server error: {str(e)}"}), 500
-
+    return jsonify( logged=True, logged_in_as=user.email, logged_in_phone=user.phone, role=user.role), 200

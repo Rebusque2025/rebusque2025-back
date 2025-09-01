@@ -30,11 +30,11 @@ class ContractAdmin(ModelView):
     }
     form_args = {
         "client": dict(
-            query_factory=lambda: User.query.filter_by(role=UserRole.CLIENTE).all(),
+            query_factory=lambda: User.query.filter_by(role=User.role).all(),
             get_label="name" 
         ),
         "provider": dict (
-            query_factory=lambda: User.query.filter_by(role=UserRole.PROVEEDOR).all(),
+            query_factory=lambda: User.query.filter_by(role=User.role).all(),
             get_label="name" 
         ),
         "service": dict(

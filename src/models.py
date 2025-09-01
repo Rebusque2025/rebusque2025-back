@@ -1,34 +1,50 @@
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
-from sqlalchemy import String, Integer, Boolean, ForeignKey, Text, DateTime, Float, Enum
+from sqlalchemy import String, Integer, Boolean, ForeignKey, Text, DateTime, Float
 from datetime import datetime
-from enum import Enum as PyEnum
+from typing import List
+#from enum import Enum as PyEnum
 
 
 # Inicializamos la extensión de SQLAlchemy
 db = SQLAlchemy()
  # 1 ====TABLA QUE GUARDA EL ROL DEL USUARIO
-class UserRole(PyEnum):
-    CLIENTE = "cliente"
-    PROVEEDOR = "proveedor"
+#class UserRole(PyEnum):
+ #   CLIENTE = "cliente"
+ #   PROVEEDOR = "proveedor"
+
+
+ 
  # 1.1 ====TABLA USER
 class User(db.Model):
     __tablename__ = 'user'
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(80), nullable=False)
-    email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(120), nullable=True) ###preguntar si es opcional entre varios campos, (entonces nullableTrue) o si no es opcional y son obligatorios los dos campos, (nullableFalse)
+    phone: Mapped[str] = mapped_column(String(20), nullable=True) ####opcion de registro con telefono agregada
     password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     photo_url: Mapped[str] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    services: Mapped[list["Service"]] = relationship(back_populates="provider")
+    services: Mapped[List["Service"]] = relationship(back_populates="provider")
     contracts_as_client: Mapped[list["Contract"]] = relationship(back_populates="client", foreign_keys="Contract.client_id")
     contracts_as_provider: Mapped[list["Contract"]] = relationship(back_populates="provider", foreign_keys="Contract.provider_id")
 
 
     def __repr__(self):
-        return f"{self.name} ({self.role.value})"
+        return f"{self.name} ({self.role})"
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "email": self.email,
+            "role": self.role,
+            "phone": self.phone,
+            "photo_url": self.photo_url,
+            "is_active": self.is_active,
+        }
 
 
  # 2 ==== TABLA CATEGORIA DEL SERVICIO
@@ -37,7 +53,13 @@ class Category(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
      #RELATIONSHIPPS
-    services: Mapped[list["Service"]] = relationship(back_populates="category")
+    services: Mapped[List["Service"]] = relationship(back_populates="category")
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "name": self.name
+        }
 
 
  # 3 ====TABLA SERVICIOS
@@ -58,6 +80,17 @@ class Service(db.Model):
 
     def __repr__(self):
         return f"{self.title} - {self.provider.name} (${self.price})"
+
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "description": self.description,
+            "price": self.price,
+            "provider": self.provider.name if self.provider else None,
+            "category": self.category.name if self.category else None,
+        }
     
  # 4 ====TABLA CONTRATACIONES(antes booking)
 class Contract(db.Model):
@@ -79,6 +112,16 @@ class Contract(db.Model):
 
     def __repr__(self):
         return f"Contrato #{self.id} - {self.client.name} ↔ {self.provider.name} ({self.status})"
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "start_date": self.start_date.isoformat(),
+            "status": self.status,
+            "client": self.client.name if self.client else None,
+            "provider": self.provider.name if self.provider else None,
+            "service": self.service.title if self.service else None,
+        }
 
 
 
@@ -102,8 +145,17 @@ class Review(db.Model):
 
 
     def __repr__(self):
-        return f"Reseña #{self.id} - {self.author.name} → {self.recipient.name} ({"⭐" * self.rating})" #prueba de multiplicar las estrellas para que se vea la calificacion total
+        return f"Reseña #{self.id} - {self.author.name} → {self.recipient.name} ({'⭐' * self.rating})" #prueba de multiplicar las estrellas para que se vea la calificacion total
 
+    def serialize(self):
+        return {
+            "id": self.id,
+            "rating": self.rating,
+            "comment": self.comment,
+            "created_at": self.created_at.isoformat(),
+            "author": self.author.name if self.author else None,
+            "recipient": self.recipient.name if self.recipient else None,
+        }
 
     @validates("rating")
     def validate_rating(self, key, value):
