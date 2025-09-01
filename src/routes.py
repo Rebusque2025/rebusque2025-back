@@ -51,13 +51,14 @@ def signup():
 
         name = data.get("name")
         email = data.get("email")
+        phone = data.get("phone")
         password = data.get("password")
         role = data.get("role")   # "cliente" o "proveedor"
         photo_url = data.get("photo_url")
 
         # Validaciones básicas
-        if not name or not email or not password or not role:
-            return jsonify({"msg": "Name, email, password and role are required"}), 400
+        if not name or not email or not phone or not password or not role:
+            return jsonify({"msg": "Name, email, phone, password and role are required"}), 400
 
         # Validar que el role sea correcto
         if role not in ["cliente", "proveedor"]:
@@ -75,6 +76,7 @@ def signup():
         new_user = User(
             name=name,
             email=email,
+            phone=phone,
             password=generate_password_hash(password),
             role=role,  # guardamos como string directamente
             photo_url=photo_url,
@@ -90,6 +92,7 @@ def signup():
                 "id": new_user.id,
                 "name": new_user.name,
                 "email": new_user.email,
+                "phone": new_user.phone,
                 "role": new_user.role,
                 "photo_url": new_user.photo_url
             }
@@ -187,18 +190,31 @@ def search_professionals():
 @main.route("/valid-auth", methods=["GET"])
 @jwt_required()
 def valid_auth():
-    email = get_jwt_identity()
+    try:
+        # Obtener el email desde el JWT
+        email = get_jwt_identity()
+        if not email:
+            return jsonify({"msg": "Invalid token"}), 401
 
-    # Buscar al usuario en la base de datos
-    user = db.session.execute(
-        select(User).where(User.email == email)
-    ).scalar_one_or_none()
+        # Buscar al usuario en la base de datos
+        user = db.session.execute(
+            select(User).where(User.email == email)
+        ).scalar_one_or_none()
 
-    if not user:
-        return jsonify({"msg": "User not found"}), 404
+        if not user:
+            return jsonify({"msg": "User not found"}), 404
 
-    return jsonify({
-        "logged": True,
-        "logged_in_as": email,
-        "role": user.role.value   # devolvemos el rol como string
-    }), 200
+        # Asegurar que el rol se devuelva como string
+        role_str = str(user.role.value) if user.role else "No role assigned"
+
+        return jsonify({
+            "logged": True,
+            "logged_in_as": email,
+            "logged_in_phone": user.phone,
+            "role": role_str
+        }), 200
+
+    except Exception as e:
+        # Captura errores inesperados
+        return jsonify({"msg": f"Server error: {str(e)}"}), 500
+
