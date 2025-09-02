@@ -6,14 +6,14 @@ from wtforms import SelectField
 
 # admin de servicios:
 class ServiceAdmin(ModelView):
-    form_columns = ["title", "description", "price", "provider", "category"]
+    form_columns = ["title", "description", "price", "provider", "category", "photo_url"]
     form_overrides = {
         "provider": QuerySelectField,
         "category": QuerySelectField,
     }
     form_args = {
         "provider": dict(
-            query_factory=lambda: User.query.filter_by(role=User.role).all(),
+            query_factory=lambda: User.query.filter_by(role="proveedor").all(),
             get_label="name"
         ),
         "category": dict(
@@ -30,11 +30,11 @@ class ContractAdmin(ModelView):
     }
     form_args = {
         "client": dict(
-            query_factory=lambda: User.query.filter_by(role=User.role).all(),
+            query_factory=lambda: User.query.filter_by(role="cliente").all(),
             get_label="name" 
         ),
         "provider": dict (
-            query_factory=lambda: User.query.filter_by(role=User.role).all(),
+            query_factory=lambda: User.query.filter_by(role="proveedor").all(),
             get_label="name" 
         ),
         "service": dict(

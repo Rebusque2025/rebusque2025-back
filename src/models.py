@@ -69,6 +69,7 @@ class Service(db.Model):
     title: Mapped[str] = mapped_column(String(150), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     price: Mapped[float] = mapped_column(Float, nullable=False)
+    photo_url: Mapped[str] = mapped_column(String(255), nullable=True) ###cargar imagen desde una url, barajar la opcion de upload luego
 
     provider_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), nullable=False)
@@ -88,6 +89,7 @@ class Service(db.Model):
             "title": self.title,
             "description": self.description,
             "price": self.price,
+            "photo_url": self.photo_url,
             "provider": self.provider.name if self.provider else None,
             "category": self.category.name if self.category else None,
         }

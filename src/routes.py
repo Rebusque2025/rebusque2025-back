@@ -161,6 +161,7 @@ def search_services():
     min_price = request.args.get("min_price", type=float)
     max_price = request.args.get("max_price", type=float)
     min_rating = request.args.get("min_rating", type=float)
+    contract_status = request.args.get("status", type=str)
 
     query = Service.query
 
@@ -172,6 +173,9 @@ def search_services():
 
     if max_price is not None:
         query = query.filter(Service.price <= max_price)
+
+    if contract_status:
+        query = query.join(Service.contracts).filter(Contract.status == contract_status)
 
 #### rating promedio
     if min_rating is not None:
@@ -188,12 +192,60 @@ def search_services():
             "price": s.price,
             "provider": s.provider.name,
             "category": s.category.name,
-            "average_rating": db.session.query(func.avg(Review.rating)).join(Service.contracts).join(Review).filter(Service.id == s.id).scalar() or 0
+            "contracts": [
+                {
+                    "id": c.id,
+                    "start_date": c.start_date,
+                    "status": c.status
+                }
+                for c in s.contracts if not contract_status or c.status == contract_status
+            ],
+            "average_rating": db.session.query(func.coalesce(func.avg(Review.rating), 0)).join(Service.contracts).outerjoin(Contract.reviews).filter(Service.id == s.id).scalar()
         }
         for s in services
     ]
 
     return jsonify(result)
+
+@search_bp.route("/provider/<int:user_id>/services", methods=["GET"])
+def get_provider_services(user_id):
+
+    services = Service.query.filter_by(provider_id=user_id).all()
+    print(services[0].contracts)
+    result = [
+        {
+            "id": s.id,
+            "title": s.title,
+            "description": s.description,
+            "price": s.price,
+            "photo_url": s.photo_url,
+            "contracts": [
+                {
+                    "id": c.id,
+                    "client_name": c.client.name if c.client else None,
+                    "status": c.status,
+                    "start_date": c.start_date
+                }
+                for c in s.contracts if c.status in ["en curso", "entregado"]
+            ]
+        }
+        for s in services
+    ]
+
+    return jsonify(result)
+
+@search_bp.route("/client/<int:user_id>/contracts", methods=["GET"])
+def get_client_contracts(user_id):
+
+    contracts = Contract.query.filter_by(client_id=user_id).all()
+
+    result = [
+        c.serialize()
+        for c in contracts if c.status in ["esperando confirmacion", "completado"]
+    ]
+
+    return jsonify(result)
+
 
 #####anexar endpoit de auth
 
