@@ -99,7 +99,7 @@ class Contract(db.Model):
     __tablename__ = "contracts"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     start_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    status: Mapped[str] = mapped_column(String(50), default="pendiente")
+    status: Mapped[str] = mapped_column(String(50), default="esperando confirmación")
 
     client_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     provider_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
