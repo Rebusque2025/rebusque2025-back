@@ -208,7 +208,7 @@ def search_services():
     min_price = request.args.get("min_price", type=float)
     max_price = request.args.get("max_price", type=float)
     min_rating = request.args.get("min_rating", type=float)
-    contract_status = request.args.get("contract_status", type=str)
+    contract_status = request.args.get("status", type=str)
 
     query = Service.query
 
@@ -266,3 +266,7 @@ def valid_auth():
         return jsonify(error="Usuario no encontrado"), 404
 
     return jsonify( logged=True, logged_in_as=user.email, logged_in_phone=user.phone, role=user.role), 200
+
+
+
+   
