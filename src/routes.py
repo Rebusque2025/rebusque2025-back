@@ -188,10 +188,10 @@ def search_professionals():
     for u in results:
         response.append(
             {
-                "provider": u.serialize(),
                 "services": [
                     {
                         "id": s.id,
+                        "provider": u.serialize(),
                         "title": s.title,
                         "description": s.description,
                         "price": s.price,
