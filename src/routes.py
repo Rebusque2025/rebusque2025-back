@@ -191,6 +191,7 @@ def search_professionals():
                 "provider": u.serialize(),
                 "services": [
                     {
+                        "id": s.id,
                         "title": s.title,
                         "description": s.description,
                         "price": s.price,
