@@ -151,7 +151,7 @@ def search_professionals():
     query = request.args.get("q", None)
 
     if not query:
-        return jsonify({"msg": "Query parameter 'q' is required"}), 400
+        query = ""  # Si no hay query, buscamos todo
 
     role_value = "proveedor"  # string literal
 
@@ -182,7 +182,9 @@ def search_professionals():
                     "title": s.title,
                     "description": s.description,
                     "price": s.price,
-                    "category": s.category.name
+                    "category": s.category.name,
+                    "provider_name": u.name,
+                    "provider_phone": u.phone,
                 }
                 for s in u.services
             ]
