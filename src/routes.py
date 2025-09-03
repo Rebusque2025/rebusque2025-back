@@ -284,14 +284,18 @@ def get_provider_services(user_id):
 
     return jsonify(result)
 
-@search_bp.route("/client/<int:user_id>/contracts", methods=["GET"])
-def get_client_contracts(user_id):
+@search_bp.route("/client/contracts", methods=["GET"])
+@jwt_required()
+def get_client_contracts():
+    current_user_id = int(get_jwt_identity())
 
-    contracts = Contract.query.filter_by(client_id=user_id).all()
+    contracts = Contract.query.filter_by(client_id=current_user_id).all()
 
+    print(contracts)
     result = [
         c.serialize()
-        for c in contracts if c.status in ["esperando confirmacion", "completado"]
+        for c in contracts
+        if c.status in ["esperando confirmación", "completado"]
     ]
 
     return jsonify(result)
@@ -309,6 +313,49 @@ def valid_auth():
         return jsonify(error="Usuario no encontrado"), 404
 
     return jsonify( logged=True, logged_in_as=user.email, logged_in_phone=user.phone, role=user.role), 200
+
+
+##### Endpoint POST de solicitud de servicio/contrato de un usuario cliente logueado y autorizado ######
+
+@search_bp.route("/contracts", methods=["POST"])
+@jwt_required()
+def create_contract():
+    current_user_id = int(get_jwt_identity())
+    data = request.get_json()
+
+    service_id = data.get("service_id")
+    if not service_id:
+        return jsonify({"error": "service_id es requerido"}), 400
+
+    service = Service.query.get(service_id)
+    if not service:
+        return jsonify({"error": "servicio no encontrado"}), 404
+
+    provider_id = service.provider_id
+
+    new_contract = Contract(
+        client_id=current_user_id,
+        provider_id=provider_id,
+        service_id=service_id,
+        status="esperando confirmación"
+    )
+    db.session.add(new_contract)
+    db.session.commit()
+
+    return jsonify({
+        "msg": "Contrato creado exitosamente",
+        "contract": {
+            "id": new_contract.id,
+            "service": service.title,
+            "provider": {
+                "id": provider_id,
+                "name": service.provider.name
+            },
+            "status": new_contract.status,
+            "start_date": new_contract.start_date
+
+        }
+    }), 201
 
 
 
