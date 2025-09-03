@@ -9,6 +9,7 @@ from src.admin import setup_admin
 from flask_migrate import Migrate
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_jwt_extended import JWTManager
+from datetime import timedelta
 
 # Crea la instancia de la aplicación Flask
 app = Flask(__name__, template_folder='src/templates')
@@ -17,7 +18,8 @@ load_dotenv()
 
 
 # Configurar la clave secreta
-app.config["JWT_SECRET_KEY"] = "super-secret-key"  
+app.config["JWT_SECRET_KEY"] = "super-secret-key" 
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=2)
 
 # Inicializar el gestor JWT con la app
 jwt = JWTManager(app)
