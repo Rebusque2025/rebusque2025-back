@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
 from flask_jwt_extended import create_access_token
 from sqlalchemy import select
+from sqlalchemy import or_
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import func
 
@@ -53,13 +54,14 @@ def signup():
 
         name = data.get("name")
         email = data.get("email")
+        phone = data.get("phone")
         password = data.get("password")
         role = data.get("role")   # "cliente" o "proveedor"
         photo_url = data.get("photo_url")
 
         # Validaciones básicas
-        if not name or not email or not password or not role:
-            return jsonify({"msg": "Name, email, password and role are required"}), 400
+        if not name or not email or not phone or not password or not role:
+            return jsonify({"msg": "Name, email, phone, password and role are required"}), 400
 
         # Validar que el role sea correcto
         if role not in ["cliente", "proveedor"]:
@@ -77,6 +79,7 @@ def signup():
         new_user = User(
             name=name,
             email=email,
+            phone=phone,
             password=generate_password_hash(password),
             role=role,  # guardamos como string directamente
             photo_url=photo_url,
@@ -92,6 +95,7 @@ def signup():
                 "id": new_user.id,
                 "name": new_user.name,
                 "email": new_user.email,
+                "phone": new_user.phone,
                 "role": new_user.role,
                 "photo_url": new_user.photo_url
             }
@@ -142,6 +146,49 @@ def login():
         print(f"error: {e}")
         return jsonify({"msg": "Unexpected error"}), 500
 
+@main.route("/search/professionals", methods=["GET"])
+def search_professionals():
+    query = request.args.get("q", None)
+
+    if not query:
+        return jsonify({"msg": "Query parameter 'q' is required"}), 400
+
+    role_value = "proveedor"  # string literal
+
+    # Consulta uniendo User, Service y Category
+    results = (
+        db.session.query(User)
+        .join(Service)
+        .join(Category)
+        .filter(
+            User.role == role_value,  # aquí usamos string puro
+            or_(
+                User.name.ilike(f"%{query}%"),
+                User.phone.ilike(f"%{query}%"),
+                Service.title.ilike(f"%{query}%"),
+                Service.description.ilike(f"%{query}%"),
+                Category.name.ilike(f"%{query}%")
+            )
+        )
+        .all()
+    )
+
+    # Serializamos los resultados
+    response = []
+    for u in results:
+        response.append({
+            "services": [
+                {
+                    "title": s.title,
+                    "description": s.description,
+                    "price": s.price,
+                    "category": s.category.name
+                }
+                for s in u.services
+            ]
+        })
+
+    return jsonify(response), 200
 
 ####### Enpoints filtros #######
 
@@ -156,7 +203,7 @@ def get_categories():
 @search_bp.route("/search", methods=["GET"])
 def search_services():
 
-       #### Filtros categoria, precio y rating 
+       #### Filtros categoria, precio, rating y status 
     category_id = request.args.get("category_id", type=int)
     min_price = request.args.get("min_price", type=float)
     max_price = request.args.get("max_price", type=float)
@@ -172,7 +219,10 @@ def search_services():
         query = query.filter(Service.price >= min_price)
 
     if max_price is not None:
-        query = query.filter(Service.price <= max_price)
+        query = query.filter(Service.price <= max_price) 
+
+    if contract_status:
+        query = query.join(Service.contracts).filter(Contract.status == contract_status).group_by(Service.id)
 
     if contract_status:
         query = query.join(Service.contracts).filter(Contract.status == contract_status)
@@ -262,7 +312,7 @@ def valid_auth():
     if not user:
         return jsonify(error="Usuario no encontrado"), 404
 
-    return jsonify( logged=True, logged_in_as=user.email, role=user.role), 200
+    return jsonify( logged=True, logged_in_as=user.email, logged_in_phone=user.phone, role=user.role), 200
 
 
 ##### Endpoint POST de solicitud de servicio/contrato de un usuario cliente logueado y autorizado ######
@@ -306,3 +356,7 @@ def create_contract():
 
         }
     }), 201
+
+
+
+   
