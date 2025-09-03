@@ -20,6 +20,7 @@ class User(db.Model):
     __tablename__ = 'user'
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(80), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(80), nullable=True)
     email: Mapped[str] = mapped_column(String(120), nullable=True) ###preguntar si es opcional entre varios campos, (entonces nullableTrue) o si no es opcional y son obligatorios los dos campos, (nullableFalse)
     phone: Mapped[str] = mapped_column(String(20), nullable=True) ####opcion de registro con telefono agregada
     password: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -33,12 +34,13 @@ class User(db.Model):
 
 
     def __repr__(self):
-        return f"{self.name} ({self.role})"
+        return f"{self.name} {self.last_name} ({self.role})"
 
     def serialize(self):
         return {
             "id": self.id,
             "name": self.name,
+            "last_name": self.last_name,
             "email": self.email,
             "role": self.role,
             "phone": self.phone,

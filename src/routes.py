@@ -56,6 +56,7 @@ def signup():
         data = request.get_json()
 
         name = data.get("name")
+        last_name = data.get("last_name")
         email = data.get("email")
         phone = data.get("phone")
         password = data.get("password")
@@ -79,6 +80,7 @@ def signup():
         # Crear nuevo usuario con contraseña hasheada
         new_user = User(
             name=name,
+            last_name=last_name,
             email=email,
             phone=phone,
             password=generate_password_hash(password),
@@ -90,22 +92,18 @@ def signup():
         db.session.add(new_user)
         db.session.commit()
 
-        return (
-            jsonify(
-                {
-                    "msg": "User created successfully",
-                    "user": {
-                        "id": new_user.id,
-                        "name": new_user.name,
-                        "email": new_user.email,
-                        "phone": new_user.phone,
-                        "role": new_user.role,
-                        "photo_url": new_user.photo_url,
-                    },
-                }
-            ),
-            201,
-        )
+        return jsonify({
+            "msg": "User created successfully",
+            "user": {
+                "id": new_user.id,
+                "name": new_user.name,
+                "last_name": new_user.last_name,
+                "email": new_user.email,
+                "phone": new_user.phone,
+                "role": new_user.role,
+                "photo_url": new_user.photo_url
+            }
+        }), 201
 
     except Exception as e:
         print(f"error: {e}")
@@ -116,10 +114,11 @@ def signup():
 def login():
     try:
         email = request.json.get("email")
+        phone = request.json.get("phone")
         password = request.json.get("password")
 
-        if not email or not password:
-            return jsonify({"msg": "Email and password are required"}), 400
+        if not email or not phone or not password:
+            return jsonify({"msg": "Email, phone and password are required"}), 400
 
         # Buscar usuario por email
         query_user = db.session.execute(select(User).where(User.email == email)).scalar_one_or_none()
@@ -132,24 +131,20 @@ def login():
             return jsonify({"msg": "Bad email or password"}), 401
 
         # Generar token con ID del usuario
-        access_token = create_access_token(identity=str(query_user.id))  ### parseando a string el id
+        access_token = create_access_token(identity=str(query_user.id)) ### parseando a string el id
 
-        return (
-            jsonify(
-                {
-                    "msg": "Login successful",
-                    "access_token": access_token,
-                    "user": {
-                        "id": query_user.id,
-                        "name": query_user.name,
-                        "email": query_user.email,
-                        "role": query_user.role,  # ya es string
-                        "photo_url": query_user.photo_url,
-                    },
-                }
-            ),
-            200,
-        )
+        return jsonify({
+            "msg": "Login successful",
+            "access_token": access_token,
+            "user": {
+                "id": query_user.id,
+                "name": query_user.name,
+                "last_name": query_user.last_name,
+                "email": query_user.email,
+                "role": query_user.role,  # ya es string
+                "photo_url": query_user.photo_url
+            }
+        }), 200
 
     except Exception as e:
         print(f"error: {e}")
@@ -174,6 +169,7 @@ def search_professionals():
             User.role == role_value,  # aquí usamos string puro
             or_(
                 User.name.ilike(f"%{query}%"),
+                User.last_name.ilike(f"%{query}%"),
                 User.phone.ilike(f"%{query}%"),
                 Service.title.ilike(f"%{query}%"),
                 Service.description.ilike(f"%{query}%"),
@@ -186,21 +182,19 @@ def search_professionals():
     # Serializamos los resultados
     response = []
     for u in results:
-        response.append(
-            {
-                "services": [
-                    {
-                        "id": s.id,
-                        "provider": u.serialize(),
-                        "title": s.title,
-                        "description": s.description,
-                        "price": s.price,
-                        "category": s.category.name,
-                    }
-                    for s in u.services
-                ],
-            }
-        )
+        response.append({
+            "services": [
+                {
+                    "id": s.id,
+                    "provider": u.serialize(),
+                    "title": s.title,
+                    "description": s.description,
+                    "price": s.price,
+                    "category": s.category.name
+                }
+                for s in u.services
+            ]
+        })
 
     return jsonify(response), 200
 
@@ -258,7 +252,10 @@ def search_services():
             "title": s.title,
             "description": s.description,
             "price": s.price,
-            "provider": s.provider.name,
+            "provider": {
+                "name": s.provider.name,
+                "last_name": s.provider.last_name
+            },
             "category": s.category.name,
             "contracts": [
                 {"id": c.id, "start_date": c.start_date, "status": c.status}
@@ -290,10 +287,15 @@ def get_provider_services(user_id):
             "price": s.price,
             "photo_url": s.photo_url,
             "contracts": [
-                {"id": c.id, "client_name": c.client.name if c.client else None, "status": c.status, "start_date": c.start_date}
-                for c in s.contracts
-                if c.status in ["en curso", "entregado"]
-            ],
+                {
+                    "id": c.id,
+                    "client_name": c.client.name if c.client else None,
+                    "client_last_name": c.client.last_name if c.client else None,
+                    "status": c.status,
+                    "start_date": c.start_date
+                }
+                for c in s.contracts if c.status in ["en curso", "entregado"]
+            ]
         }
         for s in services
     ]
@@ -352,18 +354,22 @@ def create_contract():
     db.session.add(new_contract)
     db.session.commit()
 
-    return (
-        jsonify(
-            {
-                "msg": "Contrato creado exitosamente",
-                "contract": {
-                    "id": new_contract.id,
-                    "service": service.title,
-                    "provider": {"id": provider_id, "name": service.provider.name},
-                    "status": new_contract.status,
-                    "start_date": new_contract.start_date,
-                },
-            }
-        ),
-        201,
-    )
+    return jsonify({
+        "msg": "Contrato creado exitosamente",
+        "contract": {
+            "id": new_contract.id,
+            "service": service.title,
+            "provider": {
+                "id": provider_id,
+                "name": service.provider.name,
+                "last_name": service.provider.last_name
+            },
+            "status": new_contract.status,
+            "start_date": new_contract.start_date
+
+        }
+    }), 201
+
+
+
+   
