@@ -181,7 +181,6 @@ def search_services():
 
     #### Filtros categoria, precio, rating y status
     categories = request.args.get("categories", type=str).split("-") if request.args.get("categories") else []
-    # category_id = request.args.get("category_id", type=int)
     min_price = request.args.get("min_price", type=float)
     max_price = request.args.get("max_price", type=float)
     min_rating = request.args.get("min_rating", type=float)
