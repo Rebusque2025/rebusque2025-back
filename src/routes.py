@@ -180,12 +180,15 @@ def get_categories():
 def search_services():
 
     #### Filtros categoria, precio, rating y status
-    category_id = request.args.get("category_id", type=int)
+    categories = request.args.get("categories", type=str).split("-") if request.args.get("categories") else []
+    # category_id = request.args.get("category_id", type=int)
     min_price = request.args.get("min_price", type=float)
     max_price = request.args.get("max_price", type=float)
     min_rating = request.args.get("min_rating", type=float)
     contract_status = request.args.get("status", type=str)
     search = request.args.get("search", type=str)
+
+    print("categorias", categories)
 
     query = db.session.query(Service).join(User).join(Category)
 
@@ -202,14 +205,13 @@ def search_services():
                 Category.name.ilike(search_pattern),
             )
         )
+    if categories:
+        query = query.filter(Service.category_id.in_(categories))
 
-    if category_id:
-        query = query.filter(Service.category_id == category_id)
-
-    if min_price is not None:
+    if min_price:
         query = query.filter(Service.price >= min_price)
 
-    if max_price is not None:
+    if max_price:
         query = query.filter(Service.price <= max_price)
 
     if contract_status:
