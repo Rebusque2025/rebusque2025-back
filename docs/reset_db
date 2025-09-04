@@ -1,4 +1,4 @@
-rm -rf rebusque2025.db migrations/ &&
+rm -rf instance/ migrations/ &&
 pipenv run init && pipenv run migrate -m "Initial migration" 
 && pipenv run upgrade
 

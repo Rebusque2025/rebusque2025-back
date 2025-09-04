@@ -11,25 +11,27 @@ from sqlalchemy import func
 
 
 # Define a new Blueprint for the API
-main = Blueprint('api', __name__)
-search_bp = Blueprint('search', __name__)
+main = Blueprint("api", __name__)
+search_bp = Blueprint("search", __name__)
 
-@main.route('/')
+
+@main.route("/")
 def index():
     # Obtiene la URL base de tu archivo .env
-    base_url = os.getenv('BASE_URL')
-    
+    base_url = os.getenv("BASE_URL")
+
     # Usa url_for para generar la URL del admin
-    admin_url = url_for('admin.index')
-    
+    admin_url = url_for("admin.index")
+
     # Combina la URL base con la URL del admin
     # Esto es opcional si solo necesitas la URL generada por url_for
     full_admin_url = f"{base_url}{admin_url}" if base_url else admin_url
-    
-    # Renderiza la plantilla, pasando la URL del admin
-    return render_template('index.html', admin_url=full_admin_url)
 
-@main.route('/users', methods=['GET'])
+    # Renderiza la plantilla, pasando la URL del admin
+    return render_template("index.html", admin_url=full_admin_url)
+
+
+@main.route("/users", methods=["GET"])
 def get_users():
     # Consulta todos los usuarios desde la base de datos
     # users = User.query.all()
@@ -47,16 +49,18 @@ def get_users():
     # Devuelve la lista en formato JSON
     return jsonify({"msg": "conectado"})
 
+
 @main.route("/signup", methods=["POST"])
 def signup():
     try:
         data = request.get_json()
 
         name = data.get("name")
+        last_name = data.get("last_name")
         email = data.get("email")
         phone = data.get("phone")
         password = data.get("password")
-        role = data.get("role")   # "cliente" o "proveedor"
+        role = data.get("role")  # "cliente" o "proveedor"
         photo_url = data.get("photo_url")
 
         # Validaciones básicas
@@ -68,9 +72,7 @@ def signup():
             return jsonify({"msg": "Role must be 'cliente' or 'proveedor'"}), 400
 
         # Verificar si el usuario ya existe
-        existing_user = db.session.execute(
-            select(User).where(User.email == email)
-        ).scalar_one_or_none()
+        existing_user = db.session.execute(select(User).where(User.email == email)).scalar_one_or_none()
 
         if existing_user:
             return jsonify({"msg": "User already exists"}), 409
@@ -78,12 +80,13 @@ def signup():
         # Crear nuevo usuario con contraseña hasheada
         new_user = User(
             name=name,
+            last_name=last_name,
             email=email,
             phone=phone,
             password=generate_password_hash(password),
             role=role,  # guardamos como string directamente
             photo_url=photo_url,
-            is_active=True
+            is_active=True,
         )
 
         db.session.add(new_user)
@@ -94,6 +97,7 @@ def signup():
             "user": {
                 "id": new_user.id,
                 "name": new_user.name,
+                "last_name": new_user.last_name,
                 "email": new_user.email,
                 "phone": new_user.phone,
                 "role": new_user.role,
@@ -110,15 +114,14 @@ def signup():
 def login():
     try:
         email = request.json.get("email")
+        phone = request.json.get("phone")
         password = request.json.get("password")
 
-        if not email or not password:
-            return jsonify({"msg": "Email and password are required"}), 400
+        if not email or not phone or not password:
+            return jsonify({"msg": "Email, phone and password are required"}), 400
 
         # Buscar usuario por email
-        query_user = db.session.execute(
-            select(User).where(User.email == email)
-        ).scalar_one_or_none()
+        query_user = db.session.execute(select(User).where(User.email == email)).scalar_one_or_none()
 
         if query_user is None:
             return jsonify({"msg": "User does not exist"}), 404
@@ -136,6 +139,7 @@ def login():
             "user": {
                 "id": query_user.id,
                 "name": query_user.name,
+                "last_name": query_user.last_name,
                 "email": query_user.email,
                 "role": query_user.role,  # ya es string
                 "photo_url": query_user.photo_url
@@ -146,12 +150,13 @@ def login():
         print(f"error: {e}")
         return jsonify({"msg": "Unexpected error"}), 500
 
+
 @main.route("/search/professionals", methods=["GET"])
 def search_professionals():
     query = request.args.get("q", None)
 
     if not query:
-        return jsonify({"msg": "Query parameter 'q' is required"}), 400
+        query = ""  # Si no hay query, buscamos todo
 
     role_value = "proveedor"  # string literal
 
@@ -164,11 +169,12 @@ def search_professionals():
             User.role == role_value,  # aquí usamos string puro
             or_(
                 User.name.ilike(f"%{query}%"),
+                User.last_name.ilike(f"%{query}%"),
                 User.phone.ilike(f"%{query}%"),
                 Service.title.ilike(f"%{query}%"),
                 Service.description.ilike(f"%{query}%"),
-                Category.name.ilike(f"%{query}%")
-            )
+                Category.name.ilike(f"%{query}%"),
+            ),
         )
         .all()
     )
@@ -179,6 +185,8 @@ def search_professionals():
         response.append({
             "services": [
                 {
+                    "id": s.id,
+                    "provider": u.serialize(),
                     "title": s.title,
                     "description": s.description,
                     "price": s.price,
@@ -190,20 +198,24 @@ def search_professionals():
 
     return jsonify(response), 200
 
+
 ####### Enpoints filtros #######
 
-#GET de todas las categorias
+
+# GET de todas las categorias
 @main.route("/categories", methods=["GET"])
 def get_categories():
     categories = Category.query.all()
     return jsonify([{"id": c.id, "name": c.name} for c in categories])
 
-# Barra de filtro de busqueda con bp aparte 
+
+# Barra de filtro de busqueda con bp aparte
+
 
 @search_bp.route("/search", methods=["GET"])
 def search_services():
 
-       #### Filtros categoria, precio, rating y status 
+    #### Filtros categoria, precio, rating y status
     category_id = request.args.get("category_id", type=int)
     min_price = request.args.get("min_price", type=float)
     max_price = request.args.get("max_price", type=float)
@@ -219,7 +231,7 @@ def search_services():
         query = query.filter(Service.price >= min_price)
 
     if max_price is not None:
-        query = query.filter(Service.price <= max_price) 
+        query = query.filter(Service.price <= max_price)
 
     if contract_status:
         query = query.join(Service.contracts).filter(Contract.status == contract_status).group_by(Service.id)
@@ -227,11 +239,11 @@ def search_services():
     if contract_status:
         query = query.join(Service.contracts).filter(Contract.status == contract_status)
 
-#### rating promedio
+    #### rating promedio
     if min_rating is not None:
         query = query.join(Service.contracts).join(Contract.reviews).group_by(Service.id)
         query = query.having(func.avg(Review.rating) >= min_rating)
-        
+
     services = query.all()
 
     result = [
@@ -240,22 +252,27 @@ def search_services():
             "title": s.title,
             "description": s.description,
             "price": s.price,
-            "provider": s.provider.name,
+            "provider": {
+                "name": s.provider.name,
+                "last_name": s.provider.last_name
+            },
             "category": s.category.name,
             "contracts": [
-                {
-                    "id": c.id,
-                    "start_date": c.start_date,
-                    "status": c.status
-                }
-                for c in s.contracts if not contract_status or c.status == contract_status
+                {"id": c.id, "start_date": c.start_date, "status": c.status}
+                for c in s.contracts
+                if not contract_status or c.status == contract_status
             ],
-            "average_rating": db.session.query(func.coalesce(func.avg(Review.rating), 0)).join(Service.contracts).outerjoin(Contract.reviews).filter(Service.id == s.id).scalar()
+            "average_rating": db.session.query(func.coalesce(func.avg(Review.rating), 0))
+            .join(Service.contracts)
+            .outerjoin(Contract.reviews)
+            .filter(Service.id == s.id)
+            .scalar(),
         }
         for s in services
     ]
 
     return jsonify(result)
+
 
 @search_bp.route("/provider/<int:user_id>/services", methods=["GET"])
 def get_provider_services(user_id):
@@ -273,6 +290,7 @@ def get_provider_services(user_id):
                 {
                     "id": c.id,
                     "client_name": c.client.name if c.client else None,
+                    "client_last_name": c.client.last_name if c.client else None,
                     "status": c.status,
                     "start_date": c.start_date
                 }
@@ -284,20 +302,22 @@ def get_provider_services(user_id):
 
     return jsonify(result)
 
-@search_bp.route("/client/<int:user_id>/contracts", methods=["GET"])
-def get_client_contracts(user_id):
 
-    contracts = Contract.query.filter_by(client_id=user_id).all()
+@search_bp.route("/client/contracts", methods=["GET"])
+@jwt_required()
+def get_client_contracts():
+    current_user_id = int(get_jwt_identity())
 
-    result = [
-        c.serialize()
-        for c in contracts if c.status in ["esperando confirmacion", "completado"]
-    ]
+    contracts = Contract.query.filter_by(client_id=current_user_id).all()
+
+    print(contracts)
+    result = [c.serialize() for c in contracts if c.status in ["esperando confirmación", "completado"]]
 
     return jsonify(result)
 
 
 #####anexar endpoit de auth
+
 
 @main.route("/valid-auth", methods=["GET"])
 @jwt_required()
@@ -308,5 +328,45 @@ def valid_auth():
     if not user:
         return jsonify(error="Usuario no encontrado"), 404
 
-    return jsonify( logged=True, logged_in_as=user.email, logged_in_phone=user.phone, role=user.role), 200
+    return jsonify(logged=True, logged_in_as=user.email, logged_in_phone=user.phone, role=user.role), 200
+
+
+##### Endpoint POST de solicitud de servicio/contrato de un usuario cliente logueado y autorizado ######
+
+
+@search_bp.route("/contracts", methods=["POST"])
+@jwt_required()
+def create_contract():
+    current_user_id = int(get_jwt_identity())
+    data = request.get_json()
+
+    service_id = data.get("service_id")
+    if not service_id:
+        return jsonify({"error": "service_id es requerido"}), 400
+
+    service = Service.query.get(service_id)
+    if not service:
+        return jsonify({"error": "servicio no encontrado"}), 404
+
+    provider_id = service.provider_id
+
+    new_contract = Contract(client_id=current_user_id, provider_id=provider_id, service_id=service_id, status="esperando confirmación")
+    db.session.add(new_contract)
+    db.session.commit()
+
+    return jsonify({
+        "msg": "Contrato creado exitosamente",
+        "contract": {
+            "id": new_contract.id,
+            "service": service.title,
+            "provider": {
+                "id": provider_id,
+                "name": service.provider.name,
+                "last_name": service.provider.last_name
+            },
+            "status": new_contract.status,
+            "start_date": new_contract.start_date
+
+        }
+    }), 201
 
