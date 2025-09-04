@@ -92,7 +92,7 @@ class Service(db.Model):
             "description": self.description,
             "price": self.price,
             "photo_url": self.photo_url,
-            "provider": self.provider.name if self.provider else None,
+            "provider": self.provider.serialize() if self.provider else None,
             "category": self.category.name if self.category else None,
         }
     

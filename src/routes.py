@@ -92,18 +92,23 @@ def signup():
         db.session.add(new_user)
         db.session.commit()
 
-        return jsonify({
-            "msg": "User created successfully",
-            "user": {
-                "id": new_user.id,
-                "name": new_user.name,
-                "last_name": new_user.last_name,
-                "email": new_user.email,
-                "phone": new_user.phone,
-                "role": new_user.role,
-                "photo_url": new_user.photo_url
-            }
-        }), 201
+        return (
+            jsonify(
+                {
+                    "msg": "User created successfully",
+                    "user": {
+                        "id": new_user.id,
+                        "name": new_user.name,
+                        "last_name": new_user.last_name,
+                        "email": new_user.email,
+                        "phone": new_user.phone,
+                        "role": new_user.role,
+                        "photo_url": new_user.photo_url,
+                    },
+                }
+            ),
+            201,
+        )
 
     except Exception as e:
         print(f"error: {e}")
@@ -117,7 +122,7 @@ def login():
         phone = request.json.get("phone")
         password = request.json.get("password")
 
-        if not email or not phone or not password:
+        if not email and not password or not phone and not password or not password:
             return jsonify({"msg": "Email, phone and password are required"}), 400
 
         # Buscar usuario por email
@@ -131,78 +136,37 @@ def login():
             return jsonify({"msg": "Bad email or password"}), 401
 
         # Generar token con ID del usuario
-        access_token = create_access_token(identity=str(query_user.id)) ### parseando a string el id
+        access_token = create_access_token(identity=str(query_user.id))  ### parseando a string el id
 
-        return jsonify({
-            "msg": "Login successful",
-            "access_token": access_token,
-            "user": {
-                "id": query_user.id,
-                "name": query_user.name,
-                "last_name": query_user.last_name,
-                "email": query_user.email,
-                "role": query_user.role,  # ya es string
-                "photo_url": query_user.photo_url
-            }
-        }), 200
+        return (
+            jsonify(
+                {
+                    "msg": "Login successful",
+                    "access_token": access_token,
+                    "user": {
+                        "id": query_user.id,
+                        "name": query_user.name,
+                        "last_name": query_user.last_name,
+                        "email": query_user.email,
+                        "role": query_user.role,  # ya es string
+                        "photo_url": query_user.photo_url,
+                    },
+                }
+            ),
+            200,
+        )
 
     except Exception as e:
         print(f"error: {e}")
         return jsonify({"msg": "Unexpected error"}), 500
 
 
-@main.route("/search/professionals", methods=["GET"])
-def search_professionals():
-    query = request.args.get("q", None)
-
-    if not query:
-        query = ""  # Si no hay query, buscamos todo
-
-    role_value = "proveedor"  # string literal
-
-    # Consulta uniendo User, Service y Category
-    results = (
-        db.session.query(User)
-        .join(Service)
-        .join(Category)
-        .filter(
-            User.role == role_value,  # aquí usamos string puro
-            or_(
-                User.name.ilike(f"%{query}%"),
-                User.last_name.ilike(f"%{query}%"),
-                User.phone.ilike(f"%{query}%"),
-                Service.title.ilike(f"%{query}%"),
-                Service.description.ilike(f"%{query}%"),
-                Category.name.ilike(f"%{query}%"),
-            ),
-        )
-        .all()
-    )
-
-    # Serializamos los resultados
-    response = []
-    for u in results:
-        response.append({
-            "services": [
-                {
-                    "id": s.id,
-                    "provider": u.serialize(),
-                    "title": s.title,
-                    "description": s.description,
-                    "price": s.price,
-                    "category": s.category.name
-                }
-                for s in u.services
-            ]
-        })
-
-    return jsonify(response), 200
-
-
 ####### Enpoints filtros #######
 
 
 # GET de todas las categorias
+
+
 @main.route("/categories", methods=["GET"])
 def get_categories():
     categories = Category.query.all()
@@ -221,8 +185,23 @@ def search_services():
     max_price = request.args.get("max_price", type=float)
     min_rating = request.args.get("min_rating", type=float)
     contract_status = request.args.get("status", type=str)
+    search = request.args.get("search", type=str)
 
-    query = Service.query
+    query = db.session.query(Service).join(User).join(Category)
+
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            or_(
+                User.name.ilike(search_pattern),
+                User.email.ilike(search_pattern),
+                User.last_name.ilike(search_pattern),
+                User.phone.ilike(search_pattern),
+                Service.title.ilike(search_pattern),
+                Service.description.ilike(search_pattern),
+                Category.name.ilike(search_pattern),
+            )
+        )
 
     if category_id:
         query = query.filter(Service.category_id == category_id)
@@ -247,21 +226,9 @@ def search_services():
     services = query.all()
 
     result = [
-        {
-            "id": s.id,
-            "title": s.title,
-            "description": s.description,
-            "price": s.price,
-            "provider": {
-                "name": s.provider.name,
-                "last_name": s.provider.last_name
-            },
-            "category": s.category.name,
-            "contracts": [
-                {"id": c.id, "start_date": c.start_date, "status": c.status}
-                for c in s.contracts
-                if not contract_status or c.status == contract_status
-            ],
+        s.serialize()
+        | {
+            "contracts": [c.serialize() for c in s.contracts if not contract_status or c.status == contract_status],
             "average_rating": db.session.query(func.coalesce(func.avg(Review.rating), 0))
             .join(Service.contracts)
             .outerjoin(Contract.reviews)
@@ -292,10 +259,11 @@ def get_provider_services(user_id):
                     "client_name": c.client.name if c.client else None,
                     "client_last_name": c.client.last_name if c.client else None,
                     "status": c.status,
-                    "start_date": c.start_date
+                    "start_date": c.start_date,
                 }
-                for c in s.contracts if c.status in ["en curso", "entregado"]
-            ]
+                for c in s.contracts
+                if c.status in ["en curso", "entregado"]
+            ],
         }
         for s in services
     ]
@@ -354,22 +322,18 @@ def create_contract():
     db.session.add(new_contract)
     db.session.commit()
 
-    return jsonify({
-        "msg": "Contrato creado exitosamente",
-        "contract": {
-            "id": new_contract.id,
-            "service": service.title,
-            "provider": {
-                "id": provider_id,
-                "name": service.provider.name,
-                "last_name": service.provider.last_name
-            },
-            "status": new_contract.status,
-            "start_date": new_contract.start_date
-
-        }
-    }), 201
-
-
-
-   
+    return (
+        jsonify(
+            {
+                "msg": "Contrato creado exitosamente",
+                "contract": {
+                    "id": new_contract.id,
+                    "service": service.title,
+                    "provider": {"id": provider_id, "name": service.provider.name, "last_name": service.provider.last_name},
+                    "status": new_contract.status,
+                    "start_date": new_contract.start_date,
+                },
+            }
+        ),
+        201,
+    )
