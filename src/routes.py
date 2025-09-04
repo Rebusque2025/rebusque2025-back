@@ -310,6 +310,3 @@ def valid_auth():
 
     return jsonify( logged=True, logged_in_as=user.email, logged_in_phone=user.phone, role=user.role), 200
 
-
-
-   
