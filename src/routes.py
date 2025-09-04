@@ -113,16 +113,25 @@ def signup():
 @main.route("/login", methods=["POST"])
 def login():
     try:
-        email = request.json.get("email")
-        phone = request.json.get("phone")
-        password = request.json.get("password")
+        body = request.get_json(silent=True)
+        if not body: return jsonify({"msg": "Request body most be valid JSON"}), 401
+        email = body.get("email")
+        phone = body.get("phone")
+        password = body.get("password")
 
-        if not email or not phone or not password:
-            return jsonify({"msg": "Email, phone and password are required"}), 400
 
-        # Buscar usuario por email
-        query_user = db.session.execute(select(User).where(User.email == email)).scalar_one_or_none()
+        if not password or (not email and not phone):
+            return jsonify({"msg": "Email or phone and password are required"}), 400
 
+        where_clauses = []
+        if email:
+            where_clauses.append(User.email == email)
+        if phone:
+            where_clauses.append(User.phone == phone)
+
+        # Buscar usuario por email o phone
+        query_user = db.session.execute(select(User).where(or_(*where_clauses))).scalar_one_or_none()
+        print(query_user)
         if query_user is None:
             return jsonify({"msg": "User does not exist"}), 404
 
@@ -148,7 +157,7 @@ def login():
 
     except Exception as e:
         print(f"error: {e}")
-        return jsonify({"msg": "Unexpected error"}), 500
+        return jsonify({"msg": "Unexpected error,"}), 500
 
 
 @main.route("/search/professionals", methods=["GET"])
@@ -370,3 +379,65 @@ def create_contract():
         }
     }), 201
 
+# @main.route("/refresh", methods=["POST"])
+# @jwt_required(refresh=True)
+# def refresh():
+#     current_user = get_jwt_identity()
+#     new_access_token = create_access_token(identity=current_user)
+#     return jsonify({
+#         "access_token": new_access_token
+#     }), 200
+
+@search_bp.route("/services", methods=["POST"])
+@jwt_required()
+def create_service():
+    current_user_id = get_jwt_identity()
+
+    # Buscar al usuario logueado
+    user = db.session.execute(
+        select(User).where(User.id == current_user_id)
+    ).scalar_one_or_none()
+
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
+
+    # Solo los proveedores pueden crear servicios
+    if user.role.lower() != "proveedor":
+        return jsonify({"msg": "Only providers can create services"}), 403
+
+    data = request.get_json()
+    title = data.get("title")
+    description = data.get("description")
+    price = data.get("price")
+    photo_url = data.get("photo_url")
+    category_id = data.get("category_id")
+
+    # Validaciones básicas
+    if not title or not description or not price or not category_id:
+        return jsonify({"msg": "title, description, price and category_id are required"}), 400
+
+    # Verificar que la categoría exista
+    category = db.session.execute(
+        select(Category).where(Category.id == category_id)
+    ).scalar_one_or_none()
+
+    if not category:
+        return jsonify({"msg": "Category not found"}), 404
+
+    # Crear el servicio
+    new_service = Service(
+        title=title,
+        description=description,
+        price=price,
+        photo_url=photo_url,
+        provider_id=user.id,
+        category_id=category.id
+    )
+
+    db.session.add(new_service)
+    db.session.commit()
+
+    return jsonify({
+        "msg": "Service created successfully",
+        "service": new_service.serialize()
+    }), 201

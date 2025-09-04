@@ -12,6 +12,7 @@ from flask_jwt_extended import JWTManager
 from datetime import timedelta
 
 
+3
 
 # Crea la instancia de la aplicación Flask
 app = Flask(__name__, template_folder='src/templates')
@@ -21,7 +22,7 @@ load_dotenv()
 # Configurar la clave secreta
 app.config["JWT_SECRET_KEY"] = "super-secret-key" 
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=2)
-
+# app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=3)      # refresh token largo
 
 # Inicializar el gestor JWT con la app
 jwt = JWTManager(app)
