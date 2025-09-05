@@ -27,8 +27,8 @@ class User(db.Model):
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     photo_url: Mapped[str] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    average_rating: Mapped[float] = mapped_column(db.Float, default=0.0, nullable=False)
-    total_reviews: Mapped[int] = mapped_column(db.Integer, default=0, nullable=False)
+    average_rating: Mapped[float] = mapped_column(db.Float, default=0.0, nullable=True)
+    total_reviews: Mapped[int] = mapped_column(db.Integer, default=0, nullable=True)
 
     services: Mapped[List["Service"]] = relationship(back_populates="provider")
     contracts_as_client: Mapped[list["Contract"]] = relationship(back_populates="client", foreign_keys="Contract.client_id")
