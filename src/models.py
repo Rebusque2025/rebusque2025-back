@@ -27,6 +27,8 @@ class User(db.Model):
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     photo_url: Mapped[str] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    average_rating: Mapped[float] = mapped_column(db.Float, default=0.0, nullable=False)
+    total_reviews: Mapped[int] = mapped_column(db.Integer, default=0, nullable=False)
 
     services: Mapped[List["Service"]] = relationship(back_populates="provider")
     contracts_as_client: Mapped[list["Contract"]] = relationship(back_populates="client", foreign_keys="Contract.client_id")
@@ -46,6 +48,8 @@ class User(db.Model):
             "phone": self.phone,
             "photo_url": self.photo_url,
             "is_active": self.is_active,
+            "average_rating": round(self.average_rating or 0, 2),
+            "total_reviews": self.total_reviews
         }
 
 
@@ -158,7 +162,7 @@ class Review(db.Model):
             "comment": self.comment,
             "created_at": self.created_at.isoformat(),
             "author": self.author.name if self.author else None,
-            "recipient": self.recipient.name if self.recipient else None,
+            "recipient_id": self.recipient_id
         }
 
     @validates("rating")

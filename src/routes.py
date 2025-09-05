@@ -323,18 +323,115 @@ def create_contract():
     db.session.add(new_contract)
     db.session.commit()
 
-    return (
-        jsonify(
-            {
-                "msg": "Contrato creado exitosamente",
-                "contract": {
-                    "id": new_contract.id,
-                    "service": service.title,
-                    "provider": {"id": provider_id, "name": service.provider.name, "last_name": service.provider.last_name},
-                    "status": new_contract.status,
-                    "start_date": new_contract.start_date,
-                },
-            }
-        ),
-        201,
+    return jsonify({
+        "msg": "Contrato creado exitosamente",
+        "contract": {
+            "id": new_contract.id,
+            "service": service.title,
+            "provider": {
+                "id": provider_id,
+                "name": service.provider.name,
+                "last_name": service.provider.last_name
+            },
+            "status": new_contract.status,
+            "start_date": new_contract.start_date
+
+        }
+    }), 201
+
+####Endpoint POST reseñas#####
+
+@search_bp.route("/reviews", methods=["POST"])
+@jwt_required()
+def create_review():
+    current_user_id = int(get_jwt_identity())
+    user = User.query.get(current_user_id)
+
+    if not user:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    data = request.get_json()
+    contract_id = data.get("contract_id")
+    rating = data.get("rating")
+    comment = data.get("comment", "")
+
+    if not contract_id or not rating:
+        return jsonify({"error": "Faltan datos obligatorios"}), 400 # por que uno puede colocar solo rating sin comentario pero no comentario sin rating...
+
+    contract = Contract.query.get(contract_id)
+    if not contract:
+        return jsonify({"error": "Contrato no encontrado"}), 404
+
+    if user.role == "cliente":
+        if contract.client_id != user.id:
+            return jsonify({"error": "No podes dejar reseña a este contrato"}), 403
+        recipient_id = contract.provider_id
+    elif user.role == "proveedor":
+        if contract.provider_id != user.id:
+            return jsonify({"error": "No podes dejar reseña a este contrato"}), 403
+        recipient_id = contract.client_id
+    else:
+        return jsonify({"error": "el rol no es valido"}), 400
+    
+    review = Review(
+        rating=rating,
+        comment=comment,
+        contract_id=contract.id,
+        author_id=user.id,
+        recipient_id=recipient_id
     )
+    db.session.add(review)
+
+    recipient = User.query.get(recipient_id)
+    recipient.total_reviews += 1
+    recipient.average_rating = (
+        (recipient.average_rating * (recipient.total_reviews - 1)) + review.rating) / recipient.total_reviews
+
+    db.session.commit()
+
+    return jsonify({
+        "msg": "Reseña creada con exito",
+        "review": review.serialize()
+    }), 201
+
+
+#### GET de reseñas recibidas por id de usuario
+
+   
+@search_bp.route("/reviews/<int:user_id>", methods=["GET"])
+@jwt_required()
+def get_user_reviews(user_id):
+    user = User.query.get(user_id)
+
+    if not user:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    received_reviews = Review.query.filter_by(recipient_id=user.id).all()
+    reviews_serialized = [
+        {
+            "id": r.id,
+            "rating": r.rating,
+            "comment": r.comment,
+            "created_at": r.created_at.isoformat(),
+            "author": {
+                "id": r.author.id,
+                "name": r.author.name,
+                "last_name": r.author.last_name,
+                "photo_url": r.author.photo_url
+            } if r.author else None
+        }
+        for r in received_reviews
+    ]
+
+    total_reviews = len(received_reviews)
+    average_rating = round(
+        sum(r.rating for r in received_reviews) / total_reviews, 1
+    ) if total_reviews > 0 else 0
+
+    return jsonify({
+        "user": {
+            "average_rating": average_rating,
+            "total_reviews": total_reviews
+        },
+        "reviews": reviews_serialized
+    }), 200
