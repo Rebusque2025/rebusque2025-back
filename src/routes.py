@@ -157,6 +157,7 @@ def login():
                         "name": query_user.name,
                         "last_name": query_user.last_name,
                         "email": query_user.email,
+                        "phone": query_user.phone,
                         "role": query_user.role,  # ya es string
                         "photo_url": query_user.photo_url,
                     },
@@ -515,7 +516,7 @@ def get_user_reviews(user_id):
 
     return jsonify({"user": {"average_rating": average_rating, "total_reviews": total_reviews}, "reviews": reviews_serialized}), 200
 
-#endpoint para comprobar si un trabajo ya está valorado
+#endpoint para comprobar si un trabajo ya está
 @search_bp.route("/review/contract/<int:contract_id>", methods=["GET"])
 def is_reviewed(contract_id):
 
