@@ -439,8 +439,9 @@ def create_review():
         return jsonify({"error": "Usuario no encontrado"}), 404
 
     data = request.get_json()
-    contract_id = data.get("contract_id")
-    rating = data.get("rating")
+    print(data)
+    contract_id = int(data.get("contract_id"))
+    rating = int(data.get("rating"))
     comment = data.get("comment", "")
 
     if not contract_id or not rating:
@@ -468,12 +469,21 @@ def create_review():
     db.session.add(review)
 
     recipient = User.query.get(recipient_id)
-    recipient.total_reviews += 1
-    recipient.average_rating = ((recipient.average_rating * (recipient.total_reviews - 1)) + review.rating) / recipient.total_reviews
+
+    if not recipient.total_reviews:
+        recipient.total_reviews = 1
+    else:
+        recipient.total_reviews += 1
+
+    if not recipient.average_rating:
+        recipient.average_rating = review.rating
+    else:
+        recipient.average_rating = ((recipient.average_rating * (recipient.total_reviews - 1)) + review.rating) / recipient.total_reviews
 
     db.session.commit()
 
     return jsonify({"msg": "Reseña creada con exito", "review": review.serialize()}), 201
+    # return {"msg": "prueba"}
 
 
 #### GET de reseñas recibidas por id de usuario
@@ -494,9 +504,8 @@ def get_user_reviews(user_id):
             "rating": r.rating,
             "comment": r.comment,
             "created_at": r.created_at.isoformat(),
-            "author": (
-                {"id": r.author.id, "name": r.author.name, "last_name": r.author.last_name, "photo_url": r.author.photo_url} if r.author else None
-            ),
+            "author": r.author.serialize(),
+            "recipient": r.recipient.serialize(),
         }
         for r in received_reviews
     ]
@@ -505,3 +514,13 @@ def get_user_reviews(user_id):
     average_rating = round(sum(r.rating for r in received_reviews) / total_reviews, 1) if total_reviews > 0 else 0
 
     return jsonify({"user": {"average_rating": average_rating, "total_reviews": total_reviews}, "reviews": reviews_serialized}), 200
+
+#endpoint para comprobar si un trabajo ya está valorado
+@search_bp.route("/review/contract/<int:contract_id>", methods=["GET"])
+def is_reviewed(contract_id):
+
+    review = Review.query.filter_by(contract_id=contract_id).first()
+    if review:
+        return jsonify({"reviewed": True}), 200
+    else:
+        return jsonify({"reviewed": False}), 200
