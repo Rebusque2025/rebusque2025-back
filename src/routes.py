@@ -119,11 +119,11 @@ def signup():
 def login():
     try:
         body = request.get_json(silent=True)
-        if not body: return jsonify({"msg": "Request body most be valid JSON"}), 401
+        if not body:
+            return jsonify({"msg": "Request body most be valid JSON"}), 401
         email = body.get("email")
         phone = body.get("phone")
         password = body.get("password")
-
 
         if not password or (not email and not phone):
             return jsonify({"msg": "Email or phone and password are required"}), 400
@@ -289,7 +289,20 @@ def get_client_contracts():
     contracts = Contract.query.filter_by(client_id=current_user_id).all()
 
     print(contracts)
-    result = [c.serialize() for c in contracts if c.status in ["esperando confirmación", "completado"]]
+    result = [c.serialize() for c in contracts]
+
+    return jsonify(result)
+
+
+@search_bp.route("/provider/contracts", methods=["GET"])
+@jwt_required()
+def get_provider_contracts():
+    current_user_id = int(get_jwt_identity())
+
+    contracts = Contract.query.filter_by(provider_id=current_user_id).all()
+
+    print(contracts)
+    result = [c.serialize() for c in contracts]
 
     return jsonify(result)
 
@@ -332,30 +345,45 @@ def create_contract():
     db.session.add(new_contract)
     db.session.commit()
 
-    return jsonify({
-        "msg": "Contrato creado exitosamente",
-        "contract": {
-            "id": new_contract.id,
-            "service": service.title,
-            "provider": {
-                "id": provider_id,
-                "name": service.provider.name,
-                "last_name": service.provider.last_name
-            },
-            "status": new_contract.status,
-            "start_date": new_contract.start_date
+    return (
+        jsonify(
+            {
+                "msg": "Contrato creado exitosamente",
+                "contract": {
+                    "id": new_contract.id,
+                    "service": service.title,
+                    "provider": {"id": provider_id, "name": service.provider.name, "last_name": service.provider.last_name},
+                    "status": new_contract.status,
+                    "start_date": new_contract.start_date,
+                },
+            }
+        ),
+        201,
+    )
 
-        }
-    }), 201
 
-# @main.route("/refresh", methods=["POST"])
-# @jwt_required(refresh=True)
-# def refresh():
-#     current_user = get_jwt_identity()
-#     new_access_token = create_access_token(identity=current_user)
-#     return jsonify({
-#         "access_token": new_access_token
-#     }), 200
+@search_bp.route("/contracts/<int:contract_id>/status", methods=["PUT"])
+@jwt_required()
+def update_contract_status(contract_id):
+    current_user_id = int(get_jwt_identity())
+    data = request.get_json()
+    new_status = data.get("status")
+
+    if new_status not in ["esperando confirmación", "en curso", "entregado", "completado", "cancelado"]:
+        return jsonify({"error": "Estado no válido"}), 400
+
+    contract = Contract.query.get(contract_id)
+    if not contract:
+        return jsonify({"error": "Contrato no encontrado"}), 404
+
+    if current_user_id not in [contract.client_id, contract.provider_id]:
+        return jsonify({"error": "No autorizado para actualizar este contrato"}), 403
+
+    contract.status = new_status
+    db.session.commit()
+
+    return jsonify({"msg": "Estado del contrato actualizado", "contract": contract.serialize()}), 200
+
 
 @search_bp.route("/services", methods=["POST"])
 @jwt_required()
@@ -363,9 +391,7 @@ def create_service():
     current_user_id = get_jwt_identity()
 
     # Buscar al usuario logueado
-    user = db.session.execute(
-        select(User).where(User.id == current_user_id)
-    ).scalar_one_or_none()
+    user = db.session.execute(select(User).where(User.id == current_user_id)).scalar_one_or_none()
 
     if not user:
         return jsonify({"msg": "User not found"}), 404
@@ -386,32 +412,22 @@ def create_service():
         return jsonify({"msg": "title, description, price and category_id are required"}), 400
 
     # Verificar que la categoría exista
-    category = db.session.execute(
-        select(Category).where(Category.id == category_id)
-    ).scalar_one_or_none()
+    category = db.session.execute(select(Category).where(Category.id == category_id)).scalar_one_or_none()
 
     if not category:
         return jsonify({"msg": "Category not found"}), 404
 
     # Crear el servicio
-    new_service = Service(
-        title=title,
-        description=description,
-        price=price,
-        photo_url=photo_url,
-        provider_id=user.id,
-        category_id=category.id
-    )
+    new_service = Service(title=title, description=description, price=price, photo_url=photo_url, provider_id=user.id, category_id=category.id)
 
     db.session.add(new_service)
     db.session.commit()
 
-    return jsonify({
-        "msg": "Service created successfully",
-        "service": new_service.serialize()
-    }), 201
-  
+    return jsonify({"msg": "Service created successfully", "service": new_service.serialize()}), 201
+
+
 ####Endpoint POST reseñas#####
+
 
 @search_bp.route("/reviews", methods=["POST"])
 @jwt_required()
@@ -428,7 +444,10 @@ def create_review():
     comment = data.get("comment", "")
 
     if not contract_id or not rating:
-        return jsonify({"error": "Faltan datos obligatorios"}), 400 # por que uno puede colocar solo rating sin comentario pero no comentario sin rating...
+        return (
+            jsonify({"error": "Faltan datos obligatorios"}),
+            400,
+        )  # por que uno puede colocar solo rating sin comentario pero no comentario sin rating...
 
     contract = Contract.query.get(contract_id)
     if not contract:
@@ -444,32 +463,22 @@ def create_review():
         recipient_id = contract.client_id
     else:
         return jsonify({"error": "el rol no es valido"}), 400
-    
-    review = Review(
-        rating=rating,
-        comment=comment,
-        contract_id=contract.id,
-        author_id=user.id,
-        recipient_id=recipient_id
-    )
+
+    review = Review(rating=rating, comment=comment, contract_id=contract.id, author_id=user.id, recipient_id=recipient_id)
     db.session.add(review)
 
     recipient = User.query.get(recipient_id)
     recipient.total_reviews += 1
-    recipient.average_rating = (
-        (recipient.average_rating * (recipient.total_reviews - 1)) + review.rating) / recipient.total_reviews
+    recipient.average_rating = ((recipient.average_rating * (recipient.total_reviews - 1)) + review.rating) / recipient.total_reviews
 
     db.session.commit()
 
-    return jsonify({
-        "msg": "Reseña creada con exito",
-        "review": review.serialize()
-    }), 201
+    return jsonify({"msg": "Reseña creada con exito", "review": review.serialize()}), 201
 
 
 #### GET de reseñas recibidas por id de usuario
 
-   
+
 @search_bp.route("/reviews/<int:user_id>", methods=["GET"])
 @jwt_required()
 def get_user_reviews(user_id):
@@ -485,25 +494,14 @@ def get_user_reviews(user_id):
             "rating": r.rating,
             "comment": r.comment,
             "created_at": r.created_at.isoformat(),
-            "author": {
-                "id": r.author.id,
-                "name": r.author.name,
-                "last_name": r.author.last_name,
-                "photo_url": r.author.photo_url
-            } if r.author else None
+            "author": (
+                {"id": r.author.id, "name": r.author.name, "last_name": r.author.last_name, "photo_url": r.author.photo_url} if r.author else None
+            ),
         }
         for r in received_reviews
     ]
 
     total_reviews = len(received_reviews)
-    average_rating = round(
-        sum(r.rating for r in received_reviews) / total_reviews, 1
-    ) if total_reviews > 0 else 0
+    average_rating = round(sum(r.rating for r in received_reviews) / total_reviews, 1) if total_reviews > 0 else 0
 
-    return jsonify({
-        "user": {
-            "average_rating": average_rating,
-            "total_reviews": total_reviews
-        },
-        "reviews": reviews_serialized
-    }), 200
+    return jsonify({"user": {"average_rating": average_rating, "total_reviews": total_reviews}, "reviews": reviews_serialized}), 200
