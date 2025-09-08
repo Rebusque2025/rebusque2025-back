@@ -221,10 +221,8 @@ def search_services():
     if contract_status:
         query = query.join(Service.contracts).filter(Contract.status == contract_status)
 
-    #### rating promedio
     if min_rating is not None:
-        query = query.join(Service.contracts).join(Contract.reviews).group_by(Service.id)
-        query = query.having(func.avg(Review.rating) >= min_rating)
+        query = query.filter(Service.provider.has(User.average_rating >= min_rating))
 
     services = query.all()
 
