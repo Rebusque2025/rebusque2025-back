@@ -12,7 +12,6 @@ from flask_jwt_extended import JWTManager
 from datetime import timedelta
 
 
-3
 
 # Crea la instancia de la aplicación Flask
 app = Flask(__name__, template_folder='src/templates')

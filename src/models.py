@@ -4,6 +4,7 @@ from sqlalchemy import String, Integer, Boolean, ForeignKey, Text, DateTime, Flo
 from datetime import datetime
 from typing import List
 
+
 # from enum import Enum as PyEnum
 
 
