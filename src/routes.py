@@ -1,4 +1,6 @@
-from flask import Blueprint, render_template, jsonify, url_for, request
+from flask import Blueprint, render_template, jsonify, url_for, make_response
+from flask import request
+from flask_cors import cross_origin
 import os
 from src.models import db, User, Category, Service, Contract, Review
 from werkzeug.security import generate_password_hash
@@ -50,8 +52,16 @@ def get_users():
     return jsonify({"msg": "conectado"})
 
 
-@main.route("/signup", methods=["POST"])
+@main.route("/signup", methods=["POST", "OPTIONS"])
+@cross_origin()
 def signup():
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+        response.headers.add("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS")
+        return response, 200
+    
     try:
         data = request.get_json()
 
@@ -84,7 +94,7 @@ def signup():
             email=email,
             phone=phone,
             password=generate_password_hash(password),
-            role=role,  # guardamos como string directamente
+            role=role,
             photo_url=photo_url,
             is_active=True,
         )
@@ -113,7 +123,6 @@ def signup():
     except Exception as e:
         print(f"error: {e}")
         return jsonify({"msg": "Unexpected error"}), 500
-
 
 @main.route("/login", methods=["POST"])
 def login():

@@ -5,7 +5,7 @@ from src.admin_config import ServiceAdmin, ContractAdmin, ReviewAdmin
 
 
 def setup_admin(app):
-    admin = Admin(app, name='Rebusque2025', template_mode='bootstrap3')
+    admin = Admin(app, name='Rebusque2025')
     admin.add_view(ModelView(User, db.session))
     admin.add_view(ModelView(Category, db.session))
 

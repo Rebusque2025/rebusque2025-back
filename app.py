@@ -33,8 +33,15 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 # Inicializa las extensiones con la aplicación
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app)
+CORS(app, resources={
+    r"/*": {
+        "origins": "*",  # En producción, especifica tu dominio del frontend
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_host=1)
+
 # Registra los Blueprints
 app.register_blueprint(main)
 setup_admin(app)
